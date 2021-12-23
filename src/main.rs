@@ -1,4 +1,6 @@
-use sdl2::{event::Event, keyboard::Keycode, pixels::Color, rect::Point};
+use sdl2::{
+    event::Event, keyboard::Keycode, pixels::Color, rect::Point, render::Canvas, video::Window,
+};
 use std::time::{Duration, Instant};
 
 mod font;
@@ -30,11 +32,13 @@ fn main() -> Result<(), String> {
 
     let mut fps_meter = FpsMeter::new();
     let mut last_fps = "".to_string();
+    let mut draw_context = DrawContext::new();
+    canvas.set_draw_color(PALETTE[6]);
     'running: loop {
         let render_start = Instant::now();
 
-        canvas.set_draw_color(Color::RGB(0, 0, 0));
-        canvas.clear();
+        // canvas.set_draw_color(Color::RGB(0, 0, 0));
+        // canvas.clear();
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. }
@@ -47,7 +51,6 @@ fn main() -> Result<(), String> {
         }
         // The rest of the game loop goes here...
 
-        canvas.set_draw_color(Color::RGB(255, 210, 0));
         font::print(
             &mut canvas,
             (WIDTH as i32) - (last_fps.len() * 4) as i32,
@@ -71,13 +74,15 @@ fn main() -> Result<(), String> {
         //         "the quick brown fox jumps over",
         //     )?;
         // }
-        font::print(&mut canvas, 0, 10, "THE QUICK BROWN FOX JUMPS OVER")?;
-        font::print(&mut canvas, 10, 16, "THE LAZY DOG")?;
-        font::print(&mut canvas, 0, 22, "the quick brown fox jumps over")?;
-        font::print(&mut canvas, 0, 28, "the lazy dog")?;
-        font::print(&mut canvas, 0, 34, "\\|@#~[]{}!\"$%&/()=?^*;:_'`+,.-")?;
-        font::print(&mut canvas, 0, 40, "…ˇ∧⌂█░▒▤▥◆●☉♥♪✽❎")?;
-        font::print(&mut canvas, 0, 46, "➡️⧗⬅️⬆️⬇️🐱😐🅾️웃")?;
+        // canvas.set_draw_color(PALETTE[6]);
+        draw_context.cursor = (0, 6);
+        draw_context.print(&mut canvas, "THE QUICK BROWN FOX JUMPS OVER", &vec![11])?;
+        draw_context.print(&mut canvas, "THE LAZY DOG", &vec![2])?;
+        draw_context.print(&mut canvas, "the quick brown fox jumps over", &vec![3])?;
+        draw_context.print(&mut canvas, "the lazy dog", &vec![4])?;
+        draw_context.print(&mut canvas, "\\|@#~[]{}!\"$%&/()=?^*;:_'`+,.-", &vec![10])?;
+        draw_context.print(&mut canvas, "…ˇ∧⌂█░▒▤▥◆●☉♥♪✽❎", &vec![8])?;
+        draw_context.print(&mut canvas, "➡️⧗⬅️⬆️⬇️🐱😐🅾️웃", &vec![9])?;
 
         canvas.present();
 
@@ -92,6 +97,76 @@ fn main() -> Result<(), String> {
     }
 
     Ok(())
+}
+
+lazy_static::lazy_static! {
+    static ref PALETTE: [Color; 16] = [
+        Color::RGB(0x00, 0x00, 0x00),
+        Color::RGB(0x1d, 0x2b, 0x53),
+        Color::RGB(0x7e, 0x25, 0x53),
+        Color::RGB(0x00, 0x87, 0x51),
+        Color::RGB(0xab, 0x52, 0x36),
+        Color::RGB(0x5f, 0x57, 0x4f),
+        Color::RGB(0xc2, 0xc3, 0xc7),
+        Color::RGB(0xff, 0xf1, 0xe8),
+        Color::RGB(0xff, 0x00, 0x4d),
+        Color::RGB(0xff, 0xa3, 0x00),
+        Color::RGB(0xff, 0xec, 0x27),
+        Color::RGB(0x00, 0xe4, 0x36),
+        Color::RGB(0x29, 0xad, 0xff),
+        Color::RGB(0x83, 0x76, 0x9c),
+        Color::RGB(0xff, 0x77, 0xa8),
+        Color::RGB(0xff, 0xcc, 0xaa),
+    ];
+}
+
+struct DrawContext {
+    cursor: (i32, i32),
+}
+
+impl DrawContext {
+    fn new() -> Self {
+        DrawContext { cursor: (0, 0) }
+    }
+    // // TODO variadic arguments
+    // fn cursor(&mut self, x: i32, y: i32) {
+
+    // }
+    fn print(
+        &mut self,
+        canvas: &mut Canvas<Window>,
+        text: &str,
+        optional_args: &Vec<i32>,
+    ) -> Result<(), String> {
+        let color = if optional_args.len() == 1 {
+            Some(optional_args[0])
+        } else if optional_args.len() == 3 {
+            Some(optional_args[2])
+        } else {
+            None
+        };
+        let cursor = if optional_args.len() >= 2 {
+            (optional_args[0], optional_args[1])
+        } else {
+            self.cursor
+        };
+        self.cursor = cursor.clone();
+
+        if let Some(c_idx) = color {
+            canvas.set_draw_color(PALETTE[c_idx as usize]);
+        }
+
+        // TODO Multiline
+        font::print(canvas, cursor.0, cursor.1, text)?;
+
+        self.cursor.1 = self.cursor.1 + 6;
+        if self.cursor.1 > (HEIGHT - 5) as i32 {
+            self.cursor.1 = self.cursor.1 - 6;
+            // TODO scroll viewport
+        }
+
+        Ok(())
+    }
 }
 
 struct FpsMeter {
