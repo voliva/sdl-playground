@@ -63,18 +63,21 @@ fn main() -> Result<(), String> {
         //     canvas.draw_point(Point::new(0 as i32, y as i32))?;
         //     canvas.draw_point(Point::new((WIDTH - 1) as i32, y as i32))?;
         // }
-        for line in 0..HEIGHT / 6 {
-            font::print(
-                &mut canvas,
-                0,
-                (line * 6) as i32,
-                "the quick brown fox jumps over",
-            )?;
-        }
-        // font::print(&mut canvas, 0, 10, "THE QUICK BROWN FOX JUMPS OVER")?;
-        // font::print(&mut canvas, 10, 16, "THE LAZY DOG")?;
-        // font::print(&mut canvas, 0, 22, "the quick brown fox jumps over")?;
-        // font::print(&mut canvas, 0, 28, "the lazy dog")?;
+        // for line in 0..HEIGHT / 6 {
+        //     font::print(
+        //         &mut canvas,
+        //         0,
+        //         (line * 6) as i32,
+        //         "the quick brown fox jumps over",
+        //     )?;
+        // }
+        font::print(&mut canvas, 0, 10, "THE QUICK BROWN FOX JUMPS OVER")?;
+        font::print(&mut canvas, 10, 16, "THE LAZY DOG")?;
+        font::print(&mut canvas, 0, 22, "the quick brown fox jumps over")?;
+        font::print(&mut canvas, 0, 28, "the lazy dog")?;
+        font::print(&mut canvas, 0, 34, "\\|@#~[]{}!\"$%&/()=?^*;:_'`+,.-")?;
+        font::print(&mut canvas, 0, 40, "…ˇ∧⌂█░▒▤▥◆●☉♥♪✽❎")?;
+        font::print(&mut canvas, 0, 46, "➡️⧗⬅️⬆️⬇️🐱😐🅾️웃")?;
 
         canvas.present();
 
