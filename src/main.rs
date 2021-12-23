@@ -1,5 +1,10 @@
 use sdl2::{
-    event::Event, keyboard::Keycode, pixels::Color, rect::Point, render::Canvas, video::Window,
+    event::{Event, WindowEvent},
+    keyboard::Keycode,
+    pixels::Color,
+    rect::{Point, Rect},
+    render::{Canvas, TextureAccess},
+    video::Window,
 };
 use std::time::{Duration, Instant};
 
@@ -27,18 +32,48 @@ fn main() -> Result<(), String> {
         .unwrap();
 
     let mut canvas = window.into_canvas().build().unwrap();
-    canvas.set_logical_size(WIDTH, HEIGHT).unwrap(); // Works better than set_scale
+    // canvas.set_logical_size(WIDTH, HEIGHT).unwrap(); // Works better than set_scale // Not needed anymore after frame texture
     let mut event_pump = sdl_context.event_pump().unwrap();
 
-    let mut fps_meter = FpsMeter::new();
-    let mut last_fps = "".to_string();
     let mut draw_context = DrawContext::new();
+
+    'initializing: loop {
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Window {
+                    win_event: WindowEvent::Exposed,
+                    ..
+                } => {
+                    println!("{:?}", event);
+                    break 'initializing;
+                }
+                Event::Quit { .. }
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => {
+                    return Err("Terminated".to_string());
+                }
+                _ => println!("{:?}", event),
+            }
+        }
+        std::thread::sleep(Duration::new(0, 1_000_000));
+    }
+
+    let mut fps_meter = FpsMeter::new();
+    let mut last_fps = "1".to_string();
+    let texture_creator = canvas.texture_creator();
+    let mut frame = texture_creator
+        .create_texture(None, TextureAccess::Target, WIDTH, HEIGHT)
+        .unwrap();
+    canvas
+        .with_texture_canvas(&mut frame, |canvas| canvas.clear())
+        .unwrap();
+
     canvas.set_draw_color(PALETTE[6]);
     'running: loop {
         let render_start = Instant::now();
 
-        // canvas.set_draw_color(Color::RGB(0, 0, 0));
-        // canvas.clear();
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. }
@@ -49,52 +84,85 @@ fn main() -> Result<(), String> {
                 _ => {}
             }
         }
-        // The rest of the game loop goes here...
 
-        font::print(
-            &mut canvas,
-            (WIDTH as i32) - (last_fps.len() * 4) as i32,
-            0,
-            &last_fps,
-        )?;
+        canvas
+            .with_texture_canvas(&mut frame, |canvas| {
+                draw_frame(canvas, &mut draw_context, &last_fps).unwrap();
+            })
+            .unwrap();
 
-        // for x in 0..WIDTH {
-        //     canvas.draw_point(Point::new(x as i32, 0 as i32))?;
-        //     canvas.draw_point(Point::new(x as i32, (HEIGHT - 1) as i32))?;
-        // }
-        // for y in 0..HEIGHT {
-        //     canvas.draw_point(Point::new(0 as i32, y as i32))?;
-        //     canvas.draw_point(Point::new((WIDTH - 1) as i32, y as i32))?;
-        // }
-        // for line in 0..HEIGHT / 6 {
-        //     font::print(
-        //         &mut canvas,
-        //         0,
-        //         (line * 6) as i32,
-        //         "the quick brown fox jumps over",
-        //     )?;
-        // }
-        // canvas.set_draw_color(PALETTE[6]);
-        draw_context.cursor = (0, 6);
-        draw_context.print(&mut canvas, "THE QUICK BROWN FOX JUMPS OVER", &vec![11])?;
-        draw_context.print(&mut canvas, "THE LAZY DOG", &vec![2])?;
-        draw_context.print(&mut canvas, "the quick brown fox jumps over", &vec![3])?;
-        draw_context.print(&mut canvas, "the lazy dog", &vec![4])?;
-        draw_context.print(&mut canvas, "\\|@#~[]{}!\"$%&/()=?^*;:_'`+,.-", &vec![10])?;
-        draw_context.print(&mut canvas, "…ˇ∧⌂█░▒▤▥◆●☉♥♪✽❎", &vec![8])?;
-        draw_context.print(&mut canvas, "➡️⧗⬅️⬆️⬇️🐱😐🅾️웃", &vec![9])?;
-
+        let original_color = canvas.draw_color();
+        canvas.set_draw_color(Color::BLACK);
+        canvas.clear();
+        canvas.set_draw_color(original_color);
+        canvas.copy(&frame, None, None)?;
         canvas.present();
 
         let diff = render_start.elapsed().as_nanos().min(NANOS_IN_SEC as u128) as u32;
         if TARGET_NANOS > diff {
-            ::std::thread::sleep(Duration::new(0, TARGET_NANOS - diff));
+            std::thread::sleep(Duration::new(0, TARGET_NANOS - diff));
         }
 
         if let Some(_fps) = fps_meter.register_frame() {
             last_fps = format!("{}", _fps);
         }
     }
+
+    Ok(())
+}
+
+fn draw_frame(
+    canvas: &mut Canvas<Window>,
+    draw_context: &mut DrawContext,
+    last_fps: &str,
+) -> Result<(), String> {
+    // FPS
+    let original_color = canvas.draw_color();
+    canvas.set_draw_color(Color::BLACK);
+    canvas.fill_rect(Rect::new(
+        (WIDTH as i32) - (last_fps.len() * 4) as i32 - 1,
+        0,
+        (last_fps.len() * 4) as u32 + 1,
+        6,
+    ))?;
+    canvas.set_draw_color(Color::WHITE);
+    font::print(
+        canvas,
+        (WIDTH as i32) - (last_fps.len() * 4) as i32,
+        0,
+        &last_fps,
+    )?;
+    canvas.set_draw_color(original_color);
+
+    // Random test
+    // canvas.set_draw_color(PALETTE[11]);
+    // canvas.draw_point(Point::new(10, 10))?;
+
+    // Border
+    // for x in 0..WIDTH {
+    //     canvas.draw_point(Point::new(x as i32, 0 as i32))?;
+    //     canvas.draw_point(Point::new(x as i32, (HEIGHT - 1) as i32))?;
+    // }
+    // for y in 0..HEIGHT {
+    //     canvas.draw_point(Point::new(0 as i32, y as i32))?;
+    //     canvas.draw_point(Point::new((WIDTH - 1) as i32, y as i32))?;
+    // }
+
+    // Font
+    // draw_context.print(canvas, "hello", &vec![])?;
+    // canvas.set_draw_color(PALETTE[6]);
+    draw_context.cursor = (0, 6);
+    draw_context.print(canvas, "THE QUICK BROWN FOX JUMPS OVER", &vec![11])?;
+    draw_context.print(canvas, "THE LAZY DOG", &vec![2])?;
+    draw_context.print(canvas, "the quick brown fox jumps over", &vec![3])?;
+    draw_context.print(canvas, "the lazy dog", &vec![4])?;
+    draw_context.print(canvas, "\\|@#~[]{}!\"$%&/()=?^*;:_'`+,.-", &vec![10])?;
+    draw_context.print(canvas, "…ˇ∧⌂█░▒▤▥◆●☉♥♪✽❎", &vec![8])?;
+    draw_context.print(canvas, "➡️⧗⬅️⬆️⬇️🐱😐🅾️웃", &vec![9])?;
+
+    // // Animation
+    // draw_context.print(&mut canvas, "hello", &vec![0, y])?;
+    // y = (y + 6) % (HEIGHT as i32);
 
     Ok(())
 }
