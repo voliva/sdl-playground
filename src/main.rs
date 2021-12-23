@@ -1,4 +1,4 @@
-use rlua::Lua;
+use rlua::{Function, Lua};
 use sdl2::{
     event::{Event, WindowEvent},
     keyboard::Keycode,
@@ -7,6 +7,7 @@ use sdl2::{
     render::{Canvas, TextureAccess},
     video::Window,
 };
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 mod font;
@@ -18,29 +19,11 @@ const FPS: u32 = 30;
 const NANOS_IN_SEC: u32 = 1_000_000_000;
 const TARGET_NANOS: u32 = NANOS_IN_SEC / FPS;
 
-lazy_static::lazy_static! {
-    static ref EVERYTHING: Everything = Everything::new();
+enum FnCall {
+    Print(String),
+    Cursor(i32, i32),
+    Cls,
 }
-
-struct Everything {
-    canvas: u8,
-}
-
-impl Everything {
-    fn new() -> Self {}
-    fn do_shit(&mut self) {
-        self.canvas.clear();
-    }
-
-    fn run_lua(&mut self) {
-        let lua = Lua::new();
-
-        lua.context(|lua_ctx| {
-            self.do_shit();
-        });
-    }
-}
-
 fn main() -> Result<(), String> {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
@@ -59,7 +42,73 @@ fn main() -> Result<(), String> {
     // canvas.set_logical_size(WIDTH, HEIGHT).unwrap(); // Works better than set_scale // Not needed anymore after frame texture
     let mut event_pump = sdl_context.event_pump().unwrap();
 
-    let mut draw_context = DrawContext::new();
+    let lua = Lua::new();
+
+    // let mut prints = vec![];
+    let (sender, lua_rx) = mpsc::channel();
+    lua.context(|lua_ctx| {
+        let globals = lua_ctx.globals();
+
+        let s_cpy = sender.clone();
+        let print = lua_ctx
+            .create_function(move |_, str: String| {
+                s_cpy.send(FnCall::Print(str)).unwrap();
+                Ok(())
+            })
+            .unwrap();
+        globals.set("print", print).unwrap();
+
+        let s_cpy = sender.clone();
+        let cursor = lua_ctx
+            .create_function(move |_, (x, y): (i32, i32)| {
+                s_cpy.send(FnCall::Cursor(x, y)).unwrap();
+                Ok(())
+            })
+            .unwrap();
+        globals.set("cursor", cursor).unwrap();
+
+        let s_cpy = sender.clone();
+        let cls = lua_ctx
+            .create_function(move |_, _: ()| {
+                s_cpy.send(FnCall::Cls).unwrap();
+                Ok(())
+            })
+            .unwrap();
+        globals.set("cls", cls).unwrap();
+    });
+
+    lua.context(|lua_ctx| {
+        lua_ctx
+            .load(
+                r#"
+        y = 0
+        x = 0
+
+        function _init()
+            x = 30
+        end
+
+        function _update()
+            y = (y + 1) % 128
+        end
+
+        function _draw()
+            cls()
+            cursor(x,y)
+            print("hello!!")
+        end
+    "#,
+            )
+            .exec()
+            .unwrap()
+    });
+
+    lua.context(|lua_ctx| {
+        let globals = lua_ctx.globals();
+
+        let init: Function = globals.get("_init").unwrap();
+        init.call::<_, ()>(()).unwrap();
+    });
 
     'initializing: loop {
         for event in event_pump.poll_iter() {
@@ -84,6 +133,7 @@ fn main() -> Result<(), String> {
         std::thread::sleep(Duration::new(0, 1_000_000));
     }
 
+    let mut draw_context = DrawContext::new();
     let mut fps_meter = FpsMeter::new();
     let mut last_fps = "1".to_string();
     let texture_creator = canvas.texture_creator();
@@ -93,24 +143,6 @@ fn main() -> Result<(), String> {
     canvas
         .with_texture_canvas(&mut frame, |canvas| canvas.clear())
         .unwrap();
-
-    // let lua = Lua::new();
-
-    // // let mut prints = vec![];
-    // lua.context(|lua_ctx| {
-    //     let globals = lua_ctx.globals();
-
-    //     let print = lua_ctx
-    //         .create_function(|_, str: String| {
-    //             // prints.push(str);
-    //             // draw_context.print(&mut canvas, &str, &vec![]);
-    //             Ok(())
-    //         })
-    //         .unwrap();
-    //     globals.set("print", print).unwrap();
-    // });
-
-    // lua.context(|lua_ctx| lua_ctx.load(r#"print("hello")"#).exec().unwrap());
 
     canvas.set_draw_color(PALETTE[6]);
     'running: loop {
@@ -127,9 +159,53 @@ fn main() -> Result<(), String> {
             }
         }
 
+        lua.context(|lua_ctx| {
+            let globals = lua_ctx.globals();
+
+            let update: Function = globals.get("_update").unwrap();
+            let draw: Function = globals.get("_draw").unwrap();
+
+            // TODO separate?
+            update.call::<_, ()>(()).unwrap();
+            draw.call::<_, ()>(()).unwrap();
+        });
+
         canvas
             .with_texture_canvas(&mut frame, |canvas| {
-                draw_frame(canvas, &mut draw_context, &last_fps).unwrap();
+                while let Ok(msg) = lua_rx.try_recv() {
+                    match msg {
+                        FnCall::Print(str) => draw_context.print(canvas, &str, &vec![]).unwrap(),
+                        FnCall::Cursor(x, y) => draw_context.cursor = (x, y),
+                        FnCall::Cls => {
+                            // Does it have a clear color?
+                            let original_color = canvas.draw_color();
+                            canvas.set_draw_color(Color::BLACK);
+                            canvas.clear();
+                            canvas.set_draw_color(original_color);
+                        }
+                    };
+                }
+                // draw_frame(canvas, &mut draw_context, &last_fps).unwrap();
+
+                let original_color = canvas.draw_color();
+                canvas.set_draw_color(Color::BLACK);
+                canvas
+                    .fill_rect(Rect::new(
+                        (WIDTH as i32) - (last_fps.len() * 4) as i32 - 1,
+                        0,
+                        (last_fps.len() * 4) as u32 + 1,
+                        6,
+                    ))
+                    .unwrap();
+                canvas.set_draw_color(Color::WHITE);
+                font::print(
+                    canvas,
+                    (WIDTH as i32) - (last_fps.len() * 4) as i32,
+                    0,
+                    &last_fps,
+                )
+                .unwrap();
+                canvas.set_draw_color(original_color);
             })
             .unwrap();
 
