@@ -1,3 +1,4 @@
+use rlua::Lua;
 use sdl2::{
     event::{Event, WindowEvent},
     keyboard::Keycode,
@@ -16,6 +17,29 @@ const HEIGHT: u32 = 128;
 const FPS: u32 = 30;
 const NANOS_IN_SEC: u32 = 1_000_000_000;
 const TARGET_NANOS: u32 = NANOS_IN_SEC / FPS;
+
+lazy_static::lazy_static! {
+    static ref EVERYTHING: Everything = Everything::new();
+}
+
+struct Everything {
+    canvas: u8,
+}
+
+impl Everything {
+    fn new() -> Self {}
+    fn do_shit(&mut self) {
+        self.canvas.clear();
+    }
+
+    fn run_lua(&mut self) {
+        let lua = Lua::new();
+
+        lua.context(|lua_ctx| {
+            self.do_shit();
+        });
+    }
+}
 
 fn main() -> Result<(), String> {
     let sdl_context = sdl2::init().unwrap();
@@ -69,6 +93,24 @@ fn main() -> Result<(), String> {
     canvas
         .with_texture_canvas(&mut frame, |canvas| canvas.clear())
         .unwrap();
+
+    // let lua = Lua::new();
+
+    // // let mut prints = vec![];
+    // lua.context(|lua_ctx| {
+    //     let globals = lua_ctx.globals();
+
+    //     let print = lua_ctx
+    //         .create_function(|_, str: String| {
+    //             // prints.push(str);
+    //             // draw_context.print(&mut canvas, &str, &vec![]);
+    //             Ok(())
+    //         })
+    //         .unwrap();
+    //     globals.set("print", print).unwrap();
+    // });
+
+    // lua.context(|lua_ctx| lua_ctx.load(r#"print("hello")"#).exec().unwrap());
 
     canvas.set_draw_color(PALETTE[6]);
     'running: loop {
