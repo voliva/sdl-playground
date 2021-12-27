@@ -162,7 +162,7 @@ fn new_decompression(compressed_lua: &[u8]) -> String {
     return map_emojis(&decompressed);
 }
 
-fn old_decompression(compressed_lua: &[u8]) -> String {
+fn old_decompression(_compressed_lua: &[u8]) -> String {
     todo!()
 }
 
@@ -242,7 +242,7 @@ impl BinaryReader {
             bit: 7,
         }
     }
-    fn remaining(&self) -> usize {
+    fn _remaining(&self) -> usize {
         (self.data.len() - self.pointer) * 8 - (7 - self.bit as usize)
     }
     fn next_bit(&mut self) -> u8 {
