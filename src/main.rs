@@ -1,8 +1,9 @@
+use itertools::Itertools;
 use rlua::{Function, Lua};
 use sdl2::{
     event::{Event, WindowEvent},
     keyboard::Keycode,
-    pixels::Color,
+    pixels::{Color, PixelFormatEnum},
     rect::{Point, Rect},
     render::{Canvas, TextureAccess},
     video::Window,
@@ -24,13 +25,10 @@ enum FnCall {
     Print(String),
     Cursor(i32, i32),
     Cls,
+    Spr(i32, i32, i32),
 }
 fn main() -> Result<(), String> {
-    let cartridge = png_reader::read_cartridge("minewalker.p8.png");
-
-    println!("{:?}", cartridge);
-
-    return Ok(());
+    let cartridge = png_reader::read_cartridge("minewalker.p8.png")?;
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
@@ -82,6 +80,15 @@ fn main() -> Result<(), String> {
             })
             .unwrap();
         globals.set("cls", cls).unwrap();
+
+        let s_cpy = sender.clone();
+        let spr = lua_ctx
+            .create_function(move |_, (i, x, y): (i32, i32, i32)| {
+                s_cpy.send(FnCall::Spr(i, x, y)).unwrap();
+                Ok(())
+            })
+            .unwrap();
+        globals.set("spr", spr).unwrap();
     });
 
     lua.context(|lua_ctx| {
@@ -103,6 +110,7 @@ fn main() -> Result<(), String> {
             cls()
             cursor(x,y)
             print("hello!!")
+            spr(1, 90, y)
         end
     "#,
             )
@@ -144,6 +152,43 @@ fn main() -> Result<(), String> {
     let mut fps_meter = FpsMeter::new();
     let mut last_fps = "1".to_string();
     let texture_creator = canvas.texture_creator();
+
+    // TODO mut through mem access
+    // TODO palt to change transparency
+    let transparent = vec![0, 0, 0, 0];
+    let mut spritesheet = texture_creator
+        .create_texture(
+            Some(PixelFormatEnum::RGBA8888),
+            TextureAccess::Static,
+            128,
+            128,
+        )
+        .unwrap();
+    let raw_spritesheet = &(cartridge.sprite_map[..0x2000]);
+    let pixel_data = raw_spritesheet
+        .iter()
+        .flat_map(|v| {
+            let right = *v >> 4;
+            let left = v & 0x0F;
+
+            let left_d = if left == 0 {
+                transparent.clone()
+            } else {
+                let color = PALETTE[left as usize];
+                vec![color.r, color.g, color.b, 255]
+            };
+            let right_d = if right == 0 {
+                transparent.clone()
+            } else {
+                let color = PALETTE[right as usize];
+                vec![color.r, color.g, color.b, 255]
+            };
+
+            left_d.into_iter().chain(right_d.into_iter()).collect_vec()
+        })
+        .collect_vec();
+    spritesheet.update(None, &pixel_data, 4 * 128).unwrap();
+
     let mut frame = texture_creator
         .create_texture(None, TextureAccess::Target, WIDTH, HEIGHT)
         .unwrap();
@@ -190,6 +235,13 @@ fn main() -> Result<(), String> {
                             canvas.clear();
                             canvas.set_draw_color(original_color);
                         }
+                        FnCall::Spr(sprite, x, y) => canvas
+                            .copy(
+                                &spritesheet,
+                                Some(Rect::new(8 * (sprite % 16), 8 * (sprite / 16), 8, 8)),
+                                Some(Rect::new(x, y, 8, 8)),
+                            )
+                            .unwrap(),
                     };
                 }
                 // draw_frame(canvas, &mut draw_context, &last_fps).unwrap();

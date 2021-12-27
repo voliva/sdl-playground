@@ -6,11 +6,11 @@ use png::ColorType;
 
 #[derive(Debug)]
 pub struct Cartridge {
-    sprite_map: Vec<u8>,
-    sprite_flags: Vec<u8>,
-    music: Vec<u8>,
-    sfx: Vec<u8>,
-    lua: String,
+    pub sprite_map: Vec<u8>,
+    pub sprite_flags: Vec<u8>,
+    pub music: Vec<u8>,
+    pub sfx: Vec<u8>,
+    pub lua: String,
 }
 
 pub fn read_cartridge(filename: &str) -> Result<Cartridge, String> {
@@ -159,7 +159,7 @@ fn map_emojis(ascii: &Vec<u8>) -> String {
                     138 => "⌂",
                     _ => panic!("unmaped special char {}", char),
                 };
-                println!("{}", str);
+                // println!("{}", str);
                 str.to_string()
             }
         })
