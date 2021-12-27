@@ -29,6 +29,7 @@ impl CharData {
 }
 
 // https://www.lexaloffle.com/bbs/?tid=3760
+// TODO https://pico-8.fandom.com/wiki/P8SCII
 lazy_static::lazy_static! {
   static ref CHAR_DATA: HashMap<&'static str, CharData> = HashMap::<_, _>::from_iter(
     IntoIter::new([

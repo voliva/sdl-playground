@@ -91,31 +91,51 @@ fn main() -> Result<(), String> {
         globals.set("spr", spr).unwrap();
     });
 
+    // lua.context(|lua_ctx| {
+    //     lua_ctx
+    //         .load(
+    //             r#"
+    //     y = 0
+    //     x = 0
+
+    //     function _init()
+    //         if 1 ~= 2 then
+    //             y = 100
+    //         end
+    //         if true then y = 0 end
+    //         -- y += 3
+    //         x = 30
+    //         boo = "\\-0\\-5🅾️ to mark obvious nearby mines"
+    //     end
+
+    //     function _update()
+    //         y = (y + 1) % 128
+    //     end
+
+    //     function _draw()
+    //         cls()
+    //         cursor(x,y)
+    //         print("hello!!")
+    //         spr(1, 90, y)
+    //     end
+    // "#,
+    //         )
+    //         .exec()
+    //         .unwrap()
+    // });
+
     lua.context(|lua_ctx| {
-        lua_ctx
-            .load(
-                r#"
-        y = 0
-        x = 0
+        let result = lua_ctx.load(&cartridge.lua).exec();
+        match result {
+            Ok(_) => {}
+            Err(err) => {
+                let lines = cartridge.lua.split("\n").collect_vec();
+                println!("{:#?}", &lines[339..343]);
+                println!("{:#?}", err);
 
-        function _init()
-            x = 30
-        end
-
-        function _update()
-            y = (y + 1) % 128
-        end
-
-        function _draw()
-            cls()
-            cursor(x,y)
-            print("hello!!")
-            spr(1, 90, y)
-        end
-    "#,
-            )
-            .exec()
-            .unwrap()
+                panic!("couldn't parse lua code");
+            }
+        }
     });
 
     lua.context(|lua_ctx| {

@@ -3,6 +3,7 @@ use std::fs::File;
 
 use itertools::Itertools;
 use png::ColorType;
+use regex::Regex;
 
 #[derive(Debug)]
 pub struct Cartridge {
@@ -58,13 +59,46 @@ pub fn read_cartridge(filename: &str) -> Result<Cartridge, String> {
 }
 
 fn decompress_lua(compressed_lua: &[u8]) -> String {
-    if compressed_lua[0..4] == [0, ascii('p'), ascii('x'), ascii('a')] {
+    let fake_lua = if compressed_lua[0..4] == [0, ascii('p'), ascii('x'), ascii('a')] {
         new_decompression(compressed_lua)
     } else if compressed_lua[0..4] == [ascii(':'), ascii('c'), ascii(':'), 0] {
         old_decompression(compressed_lua)
     } else {
         raw_value(compressed_lua)
-    }
+    };
+
+    fake_lua
+        .split("\n")
+        .into_iter()
+        .map(|line| {
+            // TODO improve this
+            let mut result = line.trim().to_string();
+
+            if result.starts_with("?") {
+                result = format!("print({})", &result[1..])
+            }
+
+            if result.contains("!=") {
+                result = result.replace("!=", "~=");
+            }
+
+            if result.contains("btnp") {
+                let re = Regex::new(r"btnp\(([^)]+)\)").unwrap();
+                result = re.replace_all(&result, r#"btnp("$1")"#).to_string();
+            }
+
+            if result.contains("btn") {
+                let re = Regex::new(r"btn\(([^)]+)\)").unwrap();
+                result = re.replace_all(&result, r#"btn("$1")"#).to_string();
+            }
+
+            if result.contains("\\-") {
+                result = result.replace("\\-", "\\\\-");
+            }
+
+            result
+        })
+        .join("\n")
 }
 
 fn new_decompression(compressed_lua: &[u8]) -> String {
@@ -149,6 +183,7 @@ fn map_emojis(ascii: &Vec<u8>) -> String {
             if char.is_ascii() {
                 String::from(char::from_u32(*char as u32).unwrap())
             } else {
+                // TODO https://www.lexaloffle.com/bbs/?tid=3739
                 let str = match char {
                     148 => "⬆️",
                     131 => "⬇️",
