@@ -11,6 +11,7 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 mod font;
+mod png_reader;
 
 const SCALE: f32 = 4.0;
 const WIDTH: u32 = 128;
@@ -25,6 +26,12 @@ enum FnCall {
     Cls,
 }
 fn main() -> Result<(), String> {
+    let cartridge = png_reader::read_cartridge("minewalker.p8.png");
+
+    println!("{:?}", cartridge);
+
+    return Ok(());
+
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
